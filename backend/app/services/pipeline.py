@@ -32,10 +32,11 @@ async def _inspect_single_segment(
     seg: RoadSegmentData,
     vehicle_type: VehicleType,
     semaphore: asyncio.Semaphore,
+    fetch_image: bool = True,
 ) -> tuple[float, bool]:
     async with semaphore:
         image_bytes = None
-        if settings.GOOGLE_STREET_VIEW_API_KEY:
+        if fetch_image and settings.GOOGLE_STREET_VIEW_API_KEY:
             try:
                 image_bytes = await asyncio.wait_for(
                     fetch_street_view_image_bytes(
@@ -73,6 +74,8 @@ async def _inspect_single_segment(
             functional_class=seg.functional_class,
             vehicle_type=vehicle_type,
             known_restrictions=seg.restrictions,
+            traffic_speed_class=seg.traffic_speed_class,
+            traffic_delay_seconds=seg.traffic_delay_seconds,
         )
         seg.suitability = suitability
         return suitability.suitability_score, has_image
@@ -94,8 +97,9 @@ async def analyze_candidate_routes_pipeline(
 
     for route in candidates:
         route_tasks = []
-        for seg in route.segments:
-            route_tasks.append(_inspect_single_segment(seg, vehicle_type, semaphore))
+        for s_i, seg in enumerate(route.segments):
+            should_fetch = s_i < settings.MAX_IMAGE_BUDGET_PER_ROUTE
+            route_tasks.append(_inspect_single_segment(seg, vehicle_type, semaphore, fetch_image=should_fetch))
         route_segment_counts.append(len(route_tasks))
         tasks.extend(route_tasks)
 
@@ -107,7 +111,6 @@ async def analyze_candidate_routes_pipeline(
     result_idx = 0
     for r_idx, route in enumerate(candidates):
         count = route_segment_counts[r_idx]
-        segment_suitabilities = []
 
         for seg_i in range(count):
             res = results[result_idx]
@@ -116,7 +119,6 @@ async def analyze_candidate_routes_pipeline(
 
             if isinstance(res, tuple):
                 score, has_img = res
-                segment_suitabilities.append(score)
                 if has_img:
                     imagery_successes += 1
             else:
@@ -128,16 +130,17 @@ async def analyze_candidate_routes_pipeline(
                     functional_class=seg.functional_class,
                     vehicle_type=vehicle_type,
                     known_restrictions=seg.restrictions,
+                    traffic_speed_class=seg.traffic_speed_class,
+                    traffic_delay_seconds=seg.traffic_delay_seconds,
                 )
                 seg.suitability = suitability
-                segment_suitabilities.append(suitability.suitability_score)
 
-        if segment_suitabilities:
-            route.suitability_score = round(sum(segment_suitabilities) / len(segment_suitabilities), 1)
-            route.confidence = round(
-                sum(s.suitability.confidence for s in route.segments if s.suitability) / max(1, len(route.segments)),
-                2,
-            )
+        if route.segments:
+            total_len = sum(s.length_meters for s in route.segments)
+            weighted_score = sum(s.suitability.suitability_score * s.length_meters for s in route.segments if s.suitability)
+            weighted_conf = sum(s.suitability.confidence * s.length_meters for s in route.segments if s.suitability)
+            route.suitability_score = round(weighted_score / max(1.0, total_len), 1)
+            route.confidence = round(weighted_conf / max(1.0, total_len), 2)
 
     coverage_ratio = imagery_successes / max(1, total_segments)
     return candidates, total_segments, round(coverage_ratio, 2), provenance

@@ -20,6 +20,8 @@ class RoadSegmentData(BaseModel):
     nominal_capacity_vph: float = Field(default=500.0, description="Vehicles per hour baseline capacity")
     current_volume_vph: float = Field(default=0.0, description="Observed or simulated traffic volume")
     free_flow_speed_kmh: float = Field(default=40.0)
+    traffic_delay_seconds: float = Field(default=0.0)
+    traffic_speed_class: str = Field(default="NORMAL", description="NORMAL, SLOW, or TRAFFIC_JAM")
     restrictions: list[str] = Field(default_factory=list)
     vision_analysis: Optional[VisionRoadAnalysis] = None
     suitability: Optional[RoadSuitabilityResult] = None
@@ -42,6 +44,10 @@ class CandidateRoute(BaseModel):
     suitability_score: float = Field(default=50.0, ge=0.0, le=100.0)
     confidence: float = Field(default=0.8, ge=0.0, le=1.0)
     route_color: Optional[str] = None
+    traffic_jams: list[dict[str, Any]] = Field(default_factory=list)
+    delay_seconds: float = Field(default=0.0)
+    delay_ratio: float = Field(default=1.0)
+    traffic_condition: str = Field(default="Normal")
 
 
 class RouteCostBreakdown(BaseModel):

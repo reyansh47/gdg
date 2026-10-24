@@ -28,17 +28,30 @@ const RouteComparisonComponent = {
 
       let badgeClass = 'medium';
       if (score >= 75) badgeClass = 'high';
-      else if (score < 45) badgeClass = 'low';
+      else if (score < 55) badgeClass = 'low';
 
-      // Check for bottleneck or choke points in segments
-      let chokeText = null;
-      if (route.segments) {
-        for (const seg of route.segments) {
-          if (seg.suitability && seg.suitability.suitability_score < 40) {
-            chokeText = `Choke hazard: ${seg.name}`;
-            break;
-          }
-        }
+      // Check for real traffic jams or severe bottleneck choke points
+      let trafficAlertHtml = '';
+      if (route.traffic_jams && route.traffic_jams.length > 0) {
+        const jam = route.traffic_jams[0];
+        const delayMin = Math.max(1, Math.round((route.delay_seconds || 60) / 60));
+        trafficAlertHtml = `
+          <div class="route-card-choke alert-danger">
+            <span class="traffic-jam-dot"></span>
+            <span>🚨 <strong>Traffic Jam:</strong> ${jam.street_name || route.name} (+${delayMin}m delay)</span>
+          </div>`;
+      } else if (route.delay_seconds && route.delay_seconds > 120) {
+        const delayMin = Math.round(route.delay_seconds / 60);
+        trafficAlertHtml = `
+          <div class="route-card-choke alert-warning">
+            <span>⚠️ <strong>Slowdown:</strong> Moderate traffic delays (+${delayMin}m)</span>
+          </div>`;
+      } else {
+        trafficAlertHtml = `
+          <div class="route-card-traffic-clear">
+            <span class="traffic-clear-dot"></span>
+            <span>✓ Smooth Flow (${route.traffic_condition || 'Normal'})</span>
+          </div>`;
       }
 
       const card = document.createElement('div');
@@ -48,7 +61,7 @@ const RouteComparisonComponent = {
       card.innerHTML = `
         <div class="route-card-header">
           <span class="route-card-title">${route.name}</span>
-          <span class="suitability-badge ${badgeClass}" title="Suitability Score (0-100)">
+          <span class="suitability-badge ${badgeClass}" title="Road Suitability Score (0-100)">
             ${score}/100
           </span>
         </div>
@@ -57,11 +70,7 @@ const RouteComparisonComponent = {
           <div class="route-stat-item">Dist: <strong>${distKm} km</strong></div>
           <div class="route-stat-item">Conf: <strong>${Math.round((route.confidence || 0.8) * 100)}%</strong></div>
         </div>
-        ${chokeText ? `
-          <div class="route-card-choke">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <span>${chokeText}</span>
-          </div>` : ''}
+        ${trafficAlertHtml}
       `;
 
       card.addEventListener('click', () => {

@@ -174,6 +174,88 @@ class MapController {
       zoomControl: true,
       mapTypeControl: false,
     });
+
+    // Initialize real-time Google Live Traffic Layer
+    try {
+      this.trafficLayer = new google.maps.TrafficLayer();
+      this.trafficLayer.setMap(this.googleMap);
+      console.info("Google Maps live traffic layer initialized successfully.");
+    } catch (err) {
+      console.warn("Notice: TrafficLayer initialization deferred:", err);
+    }
+  }
+
+  createTrafficJamMarker(options) {
+    const { position, title, streetName, delaySeconds, severity = 'heavy' } = options;
+    const isHeavy = severity === 'heavy';
+    const delayMin = Math.max(1, Math.round((delaySeconds || 60) / 60));
+
+    if (window.google?.maps?.marker?.AdvancedMarkerElement) {
+      const pinDiv = document.createElement('div');
+      pinDiv.className = 'custom-traffic-jam-pin';
+      pinDiv.style.position = 'relative';
+      pinDiv.style.cursor = 'pointer';
+      pinDiv.innerHTML = `
+        <div style="
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: ${isHeavy ? '#dc2626' : '#d97706'};
+          border: 2px solid #ffffff;
+          box-shadow: 0 0 10px ${isHeavy ? 'rgba(220, 38, 38, 0.7)' : 'rgba(217, 119, 6, 0.7)'};
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 13px;
+        ">🚨</div>
+      `;
+
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        map: this.googleMap,
+        position: position,
+        title: title || 'Live Traffic Jam Warning',
+        content: pinDiv,
+      });
+
+      const infoWindow = new google.maps.InfoWindow({
+        content: `
+          <div style="font-family: Outfit, sans-serif; padding: 6px 10px; color: #0f172a; max-width: 220px;">
+            <div style="font-weight: 700; color: #dc2626; font-size: 13px; display: flex; align-items: center; gap: 5px;">
+              <span>🚨</span> Real-Time Traffic Jam
+            </div>
+            <div style="font-size: 12px; margin-top: 4px; font-weight: 600;">
+              ${streetName || 'Corridor Bottleneck'}
+            </div>
+            <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+              Detected Delay: +${delayMin} mins
+            </div>
+          </div>
+        `
+      });
+
+      pinDiv.addEventListener('click', () => {
+        infoWindow.open(this.googleMap, marker);
+      });
+
+      return marker;
+    }
+
+    if (window.google?.maps?.Marker) {
+      return new google.maps.Marker({
+        position: position,
+        map: this.googleMap,
+        title: title || 'Traffic Jam Hazard',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: '#dc2626',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 2.5,
+        },
+      });
+    }
+    return null;
   }
 
   createMarker(options) {
@@ -468,6 +550,23 @@ class MapController {
       bounds.extend(this.destination);
     }
 
+    // Render Real-Time Traffic Jam Hazard Markers
+    this.routes.forEach(route => {
+      (route.traffic_jams || []).forEach(jam => {
+        if (!jam.lat || !jam.lng) return;
+        const jamMarker = this.createTrafficJamMarker({
+          position: { lat: jam.lat, lng: jam.lng },
+          title: `Traffic Jam on ${jam.street_name || route.name}`,
+          streetName: jam.street_name || route.name,
+          delaySeconds: jam.delay_seconds || route.delay_seconds,
+          severity: jam.severity || 'heavy',
+        });
+        if (jamMarker) {
+          this.googleMarkers.push(jamMarker);
+        }
+      });
+    });
+
     // User location marker if present
     if (this.userLocation) {
       const userMarker = this.createMarker({
@@ -540,12 +639,13 @@ class MapController {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
 
-    // 1. Clean modern light geospatial canvas background
-    this.ctx.fillStyle = '#f8fafc';
+    const isDark = document.body.classList.contains('dark-transit-theme');
+    // 1. Clean modern geospatial canvas background
+    this.ctx.fillStyle = isDark ? '#0b1120' : '#f8fafc';
     this.ctx.fillRect(0, 0, width, height);
 
     // 2. Subtle geometric grid lines
-    this.ctx.strokeStyle = '#e2e8f0';
+    this.ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.06)' : '#e2e8f0';
     this.ctx.lineWidth = 1;
     const gridSize = 60;
     for (let x = 0; x < width; x += gridSize) {
@@ -598,19 +698,33 @@ class MapController {
       }
     });
 
-    // 4. Draw choke point / hazard indicators on segments
+    // 4. Draw real traffic jam indicators on map
     this.routes.forEach(route => {
-      (route.segments || []).forEach(seg => {
-        if (seg.suitability && seg.suitability.suitability_score < 40) {
-          const pt = this.latLngToPixel(seg.start_coord.lat, seg.start_coord.lng);
-          // Warning indicator circle
-          this.ctx.fillStyle = '#dc2626';
+      (route.traffic_jams || []).forEach(jam => {
+        if (jam.lat && jam.lng) {
+          const pt = this.latLngToPixel(jam.lat, jam.lng);
+          const isHeavy = jam.severity === 'heavy';
+
+          // Outer glowing halo
+          this.ctx.fillStyle = isHeavy ? 'rgba(220, 38, 38, 0.35)' : 'rgba(217, 119, 6, 0.35)';
           this.ctx.beginPath();
-          this.ctx.arc(pt.x, pt.y, 6, 0, Math.PI * 2);
+          this.ctx.arc(pt.x, pt.y, 14, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          // Core pin
+          this.ctx.fillStyle = isHeavy ? '#dc2626' : '#d97706';
+          this.ctx.beginPath();
+          this.ctx.arc(pt.x, pt.y, 7, 0, Math.PI * 2);
           this.ctx.fill();
           this.ctx.strokeStyle = '#ffffff';
           this.ctx.lineWidth = 2;
           this.ctx.stroke();
+
+          // Label
+          this.ctx.fillStyle = isHeavy ? '#dc2626' : '#d97706';
+          this.ctx.font = 'bold 10px Outfit, sans-serif';
+          this.ctx.textAlign = 'left';
+          this.ctx.fillText(`🚨 ${jam.label || 'Traffic Jam'}`, pt.x + 11, pt.y + 4);
         }
       });
     });

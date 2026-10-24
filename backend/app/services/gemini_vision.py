@@ -83,6 +83,9 @@ async def analyze_road_imagery_with_gemini(
 
             except Exception as exc:
                 err_str = str(exc)
+                if "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
+                    logger.info("Gemini API daily quota limit reached; falling back instantly to road intelligence model.")
+                    return None, "gemini_quota_exceeded"
                 if "429" in err_str and attempt < max_attempts - 1:
                     logger.info("Gemini 429 rate limit reached, retrying in %.1fs...", delay)
                     await asyncio.sleep(delay)

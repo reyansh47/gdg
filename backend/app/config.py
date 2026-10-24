@@ -42,7 +42,7 @@ class Settings(BaseSettings):
         description="Gemini API Key for multimodal road inspection."
     )
     GEMINI_MODEL: str = Field(
-        default="gemini-3.5-flash",
+        default="gemini-3.8-flash",
         description="Vision-capable Gemini model name."
     )
     GEMINI_API_URL: Optional[str] = Field(

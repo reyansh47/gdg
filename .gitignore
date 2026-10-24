@@ -23,3 +23,5 @@ htmlcov/
 # IDE
 .vscode/
 .idea/
+
+desktop.ini

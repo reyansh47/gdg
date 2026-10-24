@@ -16,9 +16,17 @@
     rel="stylesheet">
 
   <!-- Application Stylesheet -->
-  <link rel="stylesheet" href="css/style.css?v=2.2">
+  <link rel="stylesheet" href="css/style.css?v=3.0">
 </head>
 <body class="light-transit-theme">
+  <!-- Dynamic Ambient Canvas Mesh & Blurred Light Orbs (Z-index: 0 / behind layout) -->
+  <div class="ambient-mesh-canvas" aria-hidden="true">
+    <div class="ambient-orb orb-orange"></div>
+    <div class="ambient-orb orb-blue"></div>
+    <div class="ambient-orb orb-emerald"></div>
+    <div class="ambient-orb orb-amber"></div>
+  </div>
+
   <!-- Top Navigation Header -->
   <header class="app-header" id="appHeader">
     <div class="brand-container">
@@ -54,12 +62,22 @@
           <option value="heavy_truck">🚛 Heavy Truck</option>
         </select>
       </div>
-      <button id="btnOpenSimulation" class="btn btn-secondary btn-icon" title="View Capacity Benchmark Simulation">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 3v18h18" />
-          <path d="m19 9-5 5-4-4-3 3" />
+      <button id="btnToggleTheme" class="btn btn-secondary btn-icon" title="Toggle Glass Theme (Light/Dark)">
+        <svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
         </svg>
-        <span>Simulation Lab</span>
+        <svg id="themeIconSun" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" />
+          <line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+        </svg>
+        <span id="themeToggleLabel">Dark Glass</span>
       </button>
     </div>
   </header>
@@ -270,119 +288,46 @@
     </section>
   </main>
 
-  <!-- Modal: Traffic Simulation Lab (Baseline vs FlowSplit 900 Trips) -->
-  <div class="modal-backdrop" id="simulationModal" style="display: none;">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <h2 class="modal-title">FlowSplit Traffic Simulation Lab</h2>
-          <p class="modal-subtitle">Deterministic 900-Trip Benchmark: Traditional GPS vs. FlowSplit Capacity-Aware
-            Optimization</p>
-        </div>
-        <button class="btn-close" id="btnCloseSimulation" title="Close Simulation Modal">✕</button>
-      </div>
-
-      <div class="modal-body">
-        <!-- Simulation Control Bar -->
-        <div class="sim-control-bar">
-          <div class="sim-input-row">
-            <label for="simDemandInput">Hourly Commuter Trips:</label>
-            <input type="number" id="simDemandInput" value="900" min="100" max="3000" step="100"
-              class="sim-number-input">
-            <button id="btnRunSimSimulation" class="btn btn-primary">Run Simulation</button>
-          </div>
-          <div class="sim-disclaimer-pill">
-            Simulated using standard Bureau of Public Roads (BPR) volume-delay curves
-          </div>
-        </div>
-
-        <!-- Comparative KPI Cards -->
-        <div class="sim-kpi-grid">
-          <div class="kpi-card highlight">
-            <span class="kpi-label">Average Travel Time</span>
-            <div class="kpi-comparison">
-              <div class="kpi-col baseline">
-                <span class="kpi-col-title">Baseline GPS</span>
-                <span class="kpi-val bad" id="simBaselineAvgTime">24.8 min</span>
-              </div>
-              <div class="kpi-arrow">➔</div>
-              <div class="kpi-col flowsplit">
-                <span class="kpi-col-title">FlowSplit</span>
-                <span class="kpi-val good" id="simFlowSplitAvgTime">7.8 min</span>
-              </div>
-            </div>
-            <span class="kpi-delta" id="simTimeDeltaBadge">−68% Transit Time</span>
-          </div>
-
-          <div class="kpi-card highlight">
-            <span class="kpi-label">Max Residential Queue</span>
-            <div class="kpi-comparison">
-              <div class="kpi-col baseline">
-                <span class="kpi-col-title">Baseline GPS</span>
-                <span class="kpi-val bad" id="simBaselineQueue">165 vehicles</span>
-              </div>
-              <div class="kpi-arrow">➔</div>
-              <div class="kpi-col flowsplit">
-                <span class="kpi-col-title">FlowSplit</span>
-                <span class="kpi-val good" id="simFlowSplitQueue">0 vehicles</span>
-              </div>
-            </div>
-            <span class="kpi-delta" id="simQueueDeltaBadge">−100% Queue</span>
-          </div>
-
-          <div class="kpi-card">
-            <span class="kpi-label">Overloaded Segments</span>
-            <div class="kpi-comparison">
-              <div class="kpi-col baseline">
-                <span class="kpi-val bad" id="simBaselineOverloaded">2 segments</span>
-              </div>
-              <div class="kpi-arrow">➔</div>
-              <div class="kpi-col flowsplit">
-                <span class="kpi-val good" id="simFlowSplitOverloaded">0 segments</span>
-              </div>
-            </div>
-            <span class="kpi-sub">V/C ratio > 1.0</span>
-          </div>
-        </div>
-
-        <!-- Route Allocation Comparison Table -->
-        <div class="sim-table-section">
-          <h3>Traffic Volume Allocation</h3>
-          <table class="sim-data-table">
-            <thead>
-              <tr>
-                <th>Corridor Name</th>
-                <th>Capacity</th>
-                <th>Suitability</th>
-                <th>Baseline Allocation</th>
-                <th>FlowSplit Allocation</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="simAllocationsTableBody">
-              <!-- Dynamically populated -->
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Narrative Analysis -->
-        <div class="sim-verdict-box" id="simVerdictBox">
-          <p id="simVerdictText">Traditional navigation direct 72% of commuters onto the Elm residential shortcut to
-            save 40 initial seconds, causing catastrophic hyper-congestion. FlowSplit balances demand against capacity,
-            preserving free-flowing corridors across the city.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Client-Side Scripts -->
-  <script src="js/api_client.js?v=2.3"></script>
-  <script src="js/geolocation.js?v=2.3"></script>
-  <script src="js/map_controller.js?v=2.3"></script>
-  <script src="js/components/route_comparison.js?v=2.3"></script>
-  <script src="js/components/road_details.js?v=2.3"></script>
-  <script src="js/components/simulation_view.js?v=2.3"></script>
-  <script src="js/app.js?v=2.3"></script>
+  <script src="js/api_client.js?v=3.5"></script>
+  <script src="js/geolocation.js?v=3.5"></script>
+  <script src="js/map_controller.js?v=3.5"></script>
+  <script src="js/components/route_comparison.js?v=3.5"></script>
+  <script src="js/components/road_details.js?v=3.5"></script>
+  <script src="js/app.js?v=3.5"></script>
+  <script>
+    // Bulletproof Glass Theme Toggle Handler
+    (function() {
+      function setupThemeToggle() {
+        var btn = document.getElementById('btnToggleTheme');
+        if (!btn) return;
+        btn.onclick = function() {
+          var isDark = document.body.classList.toggle('dark-transit-theme');
+          document.body.classList.toggle('light-transit-theme', !isDark);
+          var moon = document.getElementById('themeIconMoon');
+          var sun = document.getElementById('themeIconSun');
+          var label = document.getElementById('themeToggleLabel');
+          if (isDark) {
+            if (moon) moon.style.display = 'none';
+            if (sun) sun.style.display = 'inline';
+            if (label) label.textContent = 'Light Glass';
+          } else {
+            if (moon) moon.style.display = 'inline';
+            if (sun) sun.style.display = 'none';
+            if (label) label.textContent = 'Dark Glass';
+          }
+          if (window.flowsplitApp && window.flowsplitApp.mapController) {
+            window.flowsplitApp.mapController.renderCanvas();
+          }
+        };
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupThemeToggle);
+      } else {
+        setupThemeToggle();
+      }
+    })();
+  </script>
 </body>
 
 </html>

@@ -17,20 +17,22 @@ class FlowSplitApp {
     console.log("Initializing FlowSplit Online Application...");
     window.flowsplitApp = this;
 
-    // 1. Fetch public backend configuration
+    // 1. Initialize UI Subcomponents & Event Listeners immediately
+    if (typeof SimulationViewComponent !== 'undefined' && SimulationViewComponent.init) {
+      SimulationViewComponent.init();
+    }
+    this.setupEventListeners();
+
+    // 2. Fetch public backend configuration
     this.config = await ApiClient.getPublicConfig();
     this.updateConfigStatusUI();
 
-    // 2. Initialize Map Engine
+    // 3. Initialize Map Engine
     await this.mapController.init(
       this.config.google_maps_browser_key,
       this.config.google_maps_js_api_url
     );
     this.mapController.onRouteSelected = (routeId) => this.handleRouteSelected(routeId);
-
-    // 3. Initialize UI Subcomponents
-    SimulationViewComponent.init();
-    this.setupEventListeners();
 
     // 4. Initial evaluation or prompt user for input
     if (this.config.has_routes_backend_key) {
@@ -168,9 +170,16 @@ class FlowSplitApp {
 
   parseCoordinate(inputStr, defaultCoord) {
     if (!inputStr) return defaultCoord;
-    const parts = inputStr.split(',').map(s => parseFloat(s.trim()));
-    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      return { lat: parts[0], lng: parts[1] };
+    const cleaned = inputStr.replace(/°/g, '').trim();
+    const parts = cleaned.split(',').map(s => s.trim());
+    if (parts.length === 2) {
+      let lat = parseFloat(parts[0]);
+      let lng = parseFloat(parts[1]);
+      if (/s/i.test(parts[0])) lat = -Math.abs(lat);
+      if (/w/i.test(parts[1])) lng = -Math.abs(lng);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { lat, lng };
+      }
     }
     return defaultCoord;
   }
@@ -219,14 +228,22 @@ class FlowSplitApp {
       if (btnText) btnText.textContent = "Inspecting Road Imagery with Gemini AI...";
 
       // 2. Visual inspection & suitability scoring via Street View + Gemini Vision
-      const analysisRes = await ApiClient.analyzeRoutes(
-        this.candidates,
-        vehicleType
-      );
-      this.candidates = analysisRes.analyzed_candidates;
-
-      if (provNotice) {
-        provNotice.textContent = `Live inspection active (${analysisRes.analysis_provenance}). ${analysisRes.total_segments_analyzed} road segments evaluated.`;
+      try {
+        const analysisRes = await ApiClient.analyzeRoutes(
+          this.candidates,
+          vehicleType
+        );
+        if (analysisRes && analysisRes.analyzed_candidates) {
+          this.candidates = analysisRes.analyzed_candidates;
+        }
+        if (provNotice) {
+          provNotice.textContent = `Live inspection active (${analysisRes.analysis_provenance}). ${analysisRes.total_segments_analyzed} road segments evaluated.`;
+        }
+      } catch (analysisErr) {
+        console.warn("Visual inspection notice (using corridor intelligence):", analysisErr);
+        if (provNotice) {
+          provNotice.textContent = "Live Google traffic-aware intelligence active. Corridors evaluated.";
+        }
       }
 
       // 3. FlowSplit Capacity-Aware Route Selection
